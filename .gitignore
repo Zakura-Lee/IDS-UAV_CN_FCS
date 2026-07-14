@@ -104,3 +104,8 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# 明确不忽略 tests 目录
+!tests/
+tests/__pycache__/
+tests/.pytest_cache/
