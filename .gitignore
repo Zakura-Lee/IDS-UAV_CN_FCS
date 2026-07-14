@@ -1,0 +1,106 @@
+# -------------------- Python 环境与缓存 --------------------
+# 虚拟环境 (多种可能的名称)
+tf/
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python 字节码缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Python 打包缓存
+*.egg-info/
+dist/
+build/
+*.egg
+
+# -------------------- 依赖与包管理 --------------------
+# pip 缓存
+.pip-cache/
+
+# Poetry 虚拟环境 (如果使用)
+.poetry/
+
+# -------------------- 项目数据 (原始数据集) --------------------
+# 关键：原始数据集通常体积巨大，严禁提交
+data/raw/
+#data/processed/
+data/interim/
+
+# 如果数据存放在其他位置
+*.csv
+*.pcap
+*.pcapng
+*.json
+!sample.json  # 如果有一个示例JSON文件需要保留结构，可以白名单
+
+# -------------------- 模型输出与日志 --------------------
+# 训练好的模型文件 (通常体积大)
+#models/outputs/checkpoints/*.pth
+#models/outputs/checkpoints/*.pt
+#models/outputs/logs/
+#models/outputs/plots/
+
+# 大模型评估中间结果
+models/outputs/llm_evaluation/*.json
+!models/outputs/llm_evaluation/.gitkeep  # 保留空目录结构
+
+# -------------------- 密钥与敏感配置 --------------------
+# 环境变量文件 (包含 API 密钥)
+.env
+.env.local
+.env.*.local
+
+# 凭证文件
+*.pem
+*.key
+*.crt
+
+# -------------------- IDE 与操作系统 --------------------
+# PyCharm
+.idea/
+*.iml
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-*
+
+# 操作系统生成文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -------------------- Jupyter Notebook --------------------
+.ipynb_checkpoints/
+*.ipynb
+!example.ipynb  # 如果需要保留一个示例Notebook
+
+# -------------------- 日志与临时文件 --------------------
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# -------------------- Docker (如果使用) --------------------
+*.tar
+docker-compose.override.yml
+
+# -------------------- 测试与覆盖率 --------------------
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.mypy_cache/
+.dmypy.json
+dmypy.json

@@ -1,0 +1,38 @@
+Scenario: uav_case1
+Processed at: 2026-07-14 11:33:37
+Input file: D:\MyProject\IDS-UAV_CN_FCS\data\raw\UAV-Case1-Label.csv
+Original shape: (885384, 45)
+Cleaned shape: (885384, 43)
+Training shape after SMOTE: (1730890, 43)
+
+Class distribution before SMOTE:
+ 1     123635
+ 0     112592
+ 11     97776
+ 7      97015
+ 5      30428
+ 6      26624
+ 12     16625
+-1      15829
+ 4      15392
+ 8      11487
+ 2       9348
+ 10      5779
+ 3       4111
+ 9          4
+
+Class distribution after SMOTE:
+ 12    123635
+ 11    123635
+ 1     123635
+ 7     123635
+ 8     123635
+ 5     123635
+ 0     123635
+ 2     123635
+-1     123635
+ 10    123635
+ 6     123635
+ 4     123635
+ 3     123635
+ 9     123635
