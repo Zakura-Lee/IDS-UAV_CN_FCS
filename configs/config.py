@@ -27,13 +27,11 @@ UAV_NIDD_FILES = {
 }
 
 # UAVThreatBench 数据集 (JSON格式)
-UAV_THREAT_BENCH_DIR = RAW_DATA_DIR / "UAV-ThreatBench"  # 建议将文件放在此子目录下
-
 # 用于评估 (含标准威胁)
-UAV_THREAT_BENCH_WITH = UAV_THREAT_BENCH_DIR / "plausible_uav_ot_cyber_scenarios_withThreats.json"
+UAV_THREAT_BENCH_WITH = RAW_DATA_DIR / "plausible_uav_ot_cyber_scenarios_withThreats.json"
 
 # 用于实际推理 (无威胁)
-UAV_THREAT_BENCH_WITHOUT = UAV_THREAT_BENCH_DIR / "plausible_uav_ot_cyber_scenarios_withoutThreats.json"
+UAV_THREAT_BENCH_WITHOUT = RAW_DATA_DIR / "plausible_uav_ot_cyber_scenarios_withoutThreats.json"
 
 
 # -------------------- 模型与训练参数 --------------------
@@ -137,16 +135,6 @@ SKLEARN_VOTING_CONFIG = {
     "weights": None,
 }
 
-# -------------------- 大模型 API 配置 (DeepSeek-V4) --------------------
-# 从环境变量读取敏感信息 (需要安装 python-dotenv)
-LLM_CONFIG = {
-    "api_key": os.getenv("sk-b5af794365e34fe4b8706cba69088004"),
-    "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic"),
-    "model_name": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),  # 或 deepseek-reasoner
-    "temperature": 0.2,
-    "max_tokens": 500,
-}
-
 # -------------------- 推理与API服务配置 (Flask) --------------------
 API_CONFIG = {
     "host": "0.0.0.0",
@@ -165,3 +153,9 @@ os.makedirs(PLOT_DIR, exist_ok=True)
 # 打印关键路径，方便验证
 print(f"项目根目录: {ROOT_DIR}")
 print(f"原始数据目录: {RAW_DATA_DIR}")
+print(f"处理后数据目录: {PROCESSED_DATA_DIR}")
+print(f"模型目录: {MODEL_DIR}")
+print(f"日志目录: {LOG_DIR}")
+print(f"图表目录: {PLOT_DIR}")
+print(f"LLM 数据 (含威胁): {UAV_THREAT_BENCH_WITH}")
+print(f"LLM 数据 (无威胁): {UAV_THREAT_BENCH_WITHOUT}")
