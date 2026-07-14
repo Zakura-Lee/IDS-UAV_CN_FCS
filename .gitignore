@@ -31,7 +31,7 @@ build/
 # -------------------- 项目数据 (原始数据集) --------------------
 # 关键：原始数据集通常体积巨大，严禁提交
 data/raw/
-#data/processed/
+data/processed/
 data/interim/
 
 # 如果数据存放在其他位置
@@ -43,10 +43,10 @@ data/interim/
 
 # -------------------- 模型输出与日志 --------------------
 # 训练好的模型文件 (通常体积大)
-#models/outputs/checkpoints/*.pth
-#models/outputs/checkpoints/*.pt
-#models/outputs/logs/
-#models/outputs/plots/
+models/outputs/checkpoints/*.pth
+models/outputs/checkpoints/*.pt
+models/outputs/logs/
+models/outputs/plots/
 
 # 大模型评估中间结果
 models/outputs/llm_evaluation/*.json
