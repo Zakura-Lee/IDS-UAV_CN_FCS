@@ -99,13 +99,7 @@ docker-compose.override.yml
 # -------------------- 测试与覆盖率 --------------------
 .coverage
 htmlcov/
-.pytest_cache/
 .tox/
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
-# 明确不忽略 tests 目录
-!tests/
-tests/__pycache__/
-tests/.pytest_cache/
