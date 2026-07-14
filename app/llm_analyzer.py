@@ -22,7 +22,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz
 from openai import OpenAI
 from tqdm import tqdm
 

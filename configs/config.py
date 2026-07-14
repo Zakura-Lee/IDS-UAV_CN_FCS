@@ -2,6 +2,13 @@
 import os
 from pathlib import Path
 
+try:
+    import torch
+except Exception:  # pragma: no cover
+    # 捕获所有异常（包括 Windows 上可能出现的 OSError/DLL 加载错误），
+    # 并在无法加载 torch 时回退为 None，使得非 PyTorch 代码仍可导入。
+    torch = None
+
 # -------------------- 项目根目录 --------------------
 # 自动获取项目根目录（假设config.py在configs/下）
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -35,6 +42,27 @@ MODEL_DIR = ROOT_DIR / "models" / "outputs" / "checkpoints"
 LOG_DIR = ROOT_DIR / "models" / "outputs" / "logs"
 PLOT_DIR = ROOT_DIR / "models" / "outputs" / "plots"
 
+# -------------------- 大模型评估输出路径 --------------------
+LLM_OUTPUT_DIR = ROOT_DIR / "models" / "outputs" / "llm_evaluation"
+LLM_OUTPUT_WITH = LLM_OUTPUT_DIR / "withThreats"
+LLM_OUTPUT_WITHOUT = LLM_OUTPUT_DIR / "withoutThreats"
+LLM_OUTPUT_WITH_RESPONSES = LLM_OUTPUT_WITH / "responses.json"
+LLM_OUTPUT_WITHOUT_RESPONSES = LLM_OUTPUT_WITHOUT / "responses.json"
+LLM_EVALUATION_REPORT = LLM_OUTPUT_WITH / "evaluation_report.txt"
+
+# -------------------- 大模型 API 配置（确认完整性） --------------------
+LLM_CONFIG = {
+    "api_key": os.getenv("DEEPSEEK_API_KEY"),
+    "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+    "model_name": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+    "temperature": 0.2,
+    "max_tokens": 500,
+}
+
+# 确保 LLM 输出目录存在
+os.makedirs(LLM_OUTPUT_WITH, exist_ok=True)
+os.makedirs(LLM_OUTPUT_WITHOUT, exist_ok=True)
+
 # 训练超参数 (可根据后续实验调整)
 TRAIN_CONFIG = {
     "batch_size": 64,
@@ -55,6 +83,58 @@ MODEL_CONFIG = {
     "dropout_rate": 0.3,
     "num_classes": 11,         # UAV-NIDD有11种类别 (正常+10攻击)
     "input_dim": 45,           # UAV Case1 特征维度，不同case可能不同
+}
+
+# -------------------- PyTorch 模型配置（备用） --------------------
+MODEL_CONFIG_PYTORCH = {
+    "cnn_out_channels": 64,
+    "lstm_hidden_size": 128,
+    "lstm_num_layers": 2,
+    "dropout_rate": 0.3,
+    "num_classes": 14,          # UAV-NIDD 有 14 个类别（正常 + 13 种攻击）
+}
+
+# -------------------- 训练超参数（备用） --------------------
+TRAIN_CONFIG_PYTORCH = {
+    "batch_size": 64,
+    "learning_rate": 1e-3,
+    "num_epochs": 50,
+    "early_stopping_patience": 5,
+    "device": "cuda" if torch is not None and torch.cuda.is_available() else "cpu",
+}
+
+# -------------------- scikit-learn ensemble 配置 --------------------
+SKLEARN_MODEL_CONFIG = {
+    "ensemble_type": "VotingClassifier",
+    "use_standardizer": False,
+}
+
+SKLEARN_RF_CONFIG = {
+    "n_estimators": 150,
+    "max_depth": 16,
+    "random_state": 42,
+    "n_jobs": -1,
+}
+
+SKLEARN_XGB_CONFIG = {
+    "n_estimators": 150,
+    "learning_rate": 0.08,
+    "max_depth": 8,
+    "use_label_encoder": False,
+    "eval_metric": "mlogloss",
+    "random_state": 42,
+    "verbosity": 0,
+}
+
+SKLEARN_DT_CONFIG = {
+    "max_depth": 12,
+    "min_samples_split": 8,
+    "random_state": 42,
+}
+
+SKLEARN_VOTING_CONFIG = {
+    "voting": "soft",
+    "weights": None,
 }
 
 # -------------------- 大模型 API 配置 (DeepSeek-V4) --------------------

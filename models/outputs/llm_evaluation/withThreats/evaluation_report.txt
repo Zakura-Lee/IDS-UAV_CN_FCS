@@ -1,0 +1,45 @@
+========================================
+UAVThreatBench 大模型威胁识别评估报告
+========================================
+评估时间: 2026-07-14 17:56:39
+评估场景数: 924
+包含 ground_truth 的场景数: 924
+
+=== 总体指标 ===
+总匹配率: 0.00% (至少一个威胁匹配)
+完美匹配率: 0.00% (所有威胁匹配)
+平均匹配分数: 0.0
+
+=== 各类别匹配率 ===
+(d) 网络完整性 威胁: 0.00%
+(e) 个人数据/隐私 威胁: 0.00%
+(f) 欺诈/经济 威胁: 0.00%
+
+=== 匹配分数分布 ===
+
+=== 典型场景示例（高分） ===
+=== 典型场景示例（低分） ===
+Score: 0
+Scenario: 
+Expected: ['', '', '', '', '']
+Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+
+Score: 0
+Scenario: 
+Expected: ['', '', '', '', '']
+Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+
+Score: 0
+Scenario: 
+Expected: ['', '', '', '', '']
+Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+
+Score: 0
+Scenario: 
+Expected: ['', '', '', '', '']
+Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+
+Score: 0
+Scenario: 
+Expected: ['', '', '', '', '']
+Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
