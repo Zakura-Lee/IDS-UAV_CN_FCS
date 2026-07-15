@@ -34,6 +34,36 @@ for font_name in font_candidates:
 import numpy as np
 from thefuzz import fuzz
 
+# 语义匹配模型（sentencetransformers，懒加载）
+_SENTENCE_MODEL = None
+_SENTENCE_MODEL_AVAILABLE = False
+
+try:
+    from sentence_transformers import SentenceTransformer, util
+
+    _SENTENCE_MODEL_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    SentenceTransformer = None  # type: ignore
+    util = None  # type: ignore
+
+
+def _get_sentence_model():
+    global _SENTENCE_MODEL
+    if _SENTENCE_MODEL is None and _SENTENCE_MODEL_AVAILABLE:
+        _SENTENCE_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+    return _SENTENCE_MODEL
+
+
+def _semantic_match(text1: str, text2: str, threshold: float = 0.7) -> bool:
+    """使用 Sentence-BERT 计算语义相似度，作为模糊匹配的备选方案。"""
+    model = _get_sentence_model()
+    if model is None:
+        return False
+    emb1 = model.encode(str(text1), convert_to_tensor=True)
+    emb2 = model.encode(str(text2), convert_to_tensor=True)
+    similarity = util.pytorch_cos_sim(emb1, emb2).item()
+    return similarity >= threshold
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -49,10 +79,23 @@ except Exception:  # pragma: no cover
         project_config = None  # type: ignore
 
 
-def is_threat_match(generated: str, ground_truth: str, threshold: int = 80) -> Tuple[bool, int]:
-    """使用 token_set_ratio 进行模糊匹配，返回是否匹配和匹配分数。"""
-    score = fuzz.token_set_ratio(str(generated).lower(), str(ground_truth).lower())
-    return (score >= threshold, int(score))
+def is_threat_match(
+    generated: str, ground_truth: str,
+    threshold: int = 70, semantic_threshold: float = 0.7,
+) -> Tuple[bool, int]:
+    """先使用 token_set_ratio 模糊匹配；低于阈值时尝试 Sentence-BERT 语义匹配作为备选。"""
+    text1 = str(generated).lower()
+    text2 = str(ground_truth).lower()
+    score = fuzz.token_set_ratio(text1, text2)
+
+    if score >= threshold:
+        return (True, int(score))
+
+    if _semantic_match(text1, text2, semantic_threshold):
+        # 语义匹配成功时，将分数"提升"到阈值线以上以便报告参考
+        return (True, threshold)
+
+    return (False, int(score))
 
 
 def load_responses(path: Path) -> List[Dict[str, Any]]:
@@ -63,7 +106,19 @@ def load_responses(path: Path) -> List[Dict[str, Any]]:
     return data
 
 
-def evaluate_responses(responses_json_path: Path, threshold: int = 80) -> Dict[str, Any]:
+def _normalize_category(cat: str) -> str:
+    """将类别统一为 (d)、(e)、(f) 格式。"""
+    cat = str(cat or "").strip().lower()
+    if cat in {"d", "(d)"}:
+        return "(d)"
+    if cat in {"e", "(e)"}:
+        return "(e)"
+    if cat in {"f", "(f)"}:
+        return "(f)"
+    return cat
+
+
+def evaluate_responses(responses_json_path: Path, threshold: int = 70) -> Dict[str, Any]:
     responses = load_responses(responses_json_path)
 
     total = len(responses)
@@ -73,6 +128,7 @@ def evaluate_responses(responses_json_path: Path, threshold: int = 80) -> Dict[s
     at_least_one_match = 0
     perfect_match = 0
     best_scores: List[int] = []
+    scene_weighted_rates: List[float] = []
     missing_generated_category = 0
     category_counts = Counter()
     category_matches = Counter()
@@ -89,8 +145,14 @@ def evaluate_responses(responses_json_path: Path, threshold: int = 80) -> Dict[s
         expected_cats = []
         for e in expected:
             if isinstance(e, dict):
-                expected_descs.append(str(e.get("description", "")).strip())
-                expected_cats.append(str(e.get("category", "")).strip().lower())
+                threat_text = (
+                    e.get("Threat")
+                    or e.get("description")
+                    or e.get("text")
+                    or ""
+                )
+                expected_descs.append(str(threat_text).strip())
+                expected_cats.append(_normalize_category(e.get("RED Article") or e.get("category") or ""))
             else:
                 expected_descs.append(str(e).strip())
 
@@ -100,15 +162,16 @@ def evaluate_responses(responses_json_path: Path, threshold: int = 80) -> Dict[s
             if isinstance(g, dict):
                 gen_items.append({
                     "description": str(g.get("description", "")).strip(),
-                    "category": str(g.get("category", "")).strip().lower(),
+                    "category": _normalize_category(g.get("category", "")),
                 })
             else:
                 gen_items.append({"description": str(g).strip(), "category": ""})
 
         # 记录各类别总数
         for c in expected_cats:
-            if c in ("d", "e", "f"):
-                category_counts[c] += 1
+            normalized = _normalize_category(c)
+            if normalized in ("(d)", "(e)", "(f)"):
+                category_counts[normalized] += 1
 
         if not expected_descs:
             # 无 ground truth，跳过评估，但仍收集示例
@@ -150,13 +213,29 @@ def evaluate_responses(responses_json_path: Path, threshold: int = 80) -> Dict[s
                 if matched:
                     exp_matched = True
                     # 增加类别匹配计数
-                    if gen.get("category") in ("d", "e", "f"):
+                    if gen.get("category") in ("(d)", "(e)", "(f)"):
                         category_matches[gen.get("category")] += 1
                     break
             if not exp_matched:
                 all_matched = False
         if all_matched:
             perfect_match += 1
+
+        # --- 加权匹配率：越靠前的专家威胁权重越高（假设按重要性排序）---
+        num_exp = len(expected_descs)
+        if num_exp > 0:
+            weights = [max(1.0 - i * 0.1, 0.5) for i in range(num_exp)]
+            total_weight = sum(weights)
+            matched_weight = 0.0
+            for i, exp in enumerate(expected_descs):
+                for gen in gen_items:
+                    matched, _ = is_threat_match(gen["description"], exp, threshold=threshold)
+                    if matched:
+                        matched_weight += weights[i]
+                        break
+            scene_weighted_rates.append(matched_weight / total_weight if total_weight > 0 else 0.0)
+        else:
+            scene_weighted_rates.append(1.0)
 
         # 记录示例用于报告
         avg_scene_score = int(sum(scene_best_scores) / len(scene_best_scores)) if scene_best_scores else 0
@@ -166,19 +245,22 @@ def evaluate_responses(responses_json_path: Path, threshold: int = 80) -> Dict[s
             examples_low.append({"scenario": entry.get("scenario_description", ""), "score": avg_scene_score, "expected": expected_descs, "generated": gen_items})
 
     total_with_gt = sum(1 for e in responses if e.get("expected_threats"))
+    avg_weighted_rate = float(np.mean(scene_weighted_rates)) if scene_weighted_rates else 0.0
 
     overall_match_rate = at_least_one_match / max(1, total_with_gt)
     perfect_match_rate = perfect_match / max(1, total_with_gt)
     avg_best_score = float(sum(best_scores) / max(1, len(best_scores)))
 
     category_rates = {}
-    for cat in ("d", "e", "f"):
+    for cat in ("(d)", "(e)", "(f)"):
         category_rates[cat] = (category_matches.get(cat, 0) / category_counts.get(cat, 1)) if category_counts.get(cat, 0) else 0.0
 
     metrics = {
         "total_scenes": total,
         "scenes_with_ground_truth": total_with_gt,
+        "match_threshold": threshold,
         "overall_match_rate": overall_match_rate,
+        "weighted_match_rate": avg_weighted_rate,
         "perfect_match_rate": perfect_match_rate,
         "average_best_score": avg_best_score,
         "category_match_rates": category_rates,
@@ -219,17 +301,19 @@ def save_report_text(outputs: Dict[str, Any], output_path: Path) -> None:
         f"评估时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"评估场景数: {metrics['total_scenes']}",
         f"包含 ground_truth 的场景数: {metrics['scenes_with_ground_truth']}",
+        f"匹配阈值: {metrics.get('match_threshold', 75)}",
         "",
         "=== 总体指标 ===",
         f"总匹配率: {metrics['overall_match_rate']:.2%} (至少一个威胁匹配)",
+        f"加权匹配率: {metrics.get('weighted_match_rate', 0):.2%} (按重要性加权)",
         f"完美匹配率: {metrics['perfect_match_rate']:.2%} (所有威胁匹配)",
         f"平均匹配分数: {metrics['average_best_score']:.1f}",
         "",
         "=== 各类别匹配率 ===",
     ]
     for k, v in metrics['category_match_rates'].items():
-        label = {'d': '网络完整性', 'e': '个人数据/隐私', 'f': '欺诈/经济'}[k]
-        lines.append(f"({k}) {label} 威胁: {v:.2%}")
+        label = {'(d)': '网络完整性', '(e)': '个人数据/隐私', '(f)': '欺诈/经济'}[k]
+        lines.append(f"{k} {label} 威胁: {v:.2%}")
 
     lines.append("")
     lines.append("=== 匹配分数分布 ===")

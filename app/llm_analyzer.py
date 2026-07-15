@@ -9,6 +9,7 @@ labels when available.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sys
@@ -22,9 +23,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from thefuzz import fuzz
 from openai import OpenAI
 from tqdm import tqdm
+
+try:
+    from thefuzz import fuzz as thefuzz_fuzz
+except ImportError:  # pragma: no cover
+    thefuzz_fuzz = None
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -36,6 +41,8 @@ try:
     import configs.config as project_config
 except ImportError:  # pragma: no cover
     from config import config as project_config  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 
 class UAVThreatBenchAnalyzer:
@@ -49,11 +56,23 @@ class UAVThreatBenchAnalyzer:
         self.without_threats_dir = self.output_dir / "withoutThreats"
         self.with_threats_dir.mkdir(parents=True, exist_ok=True)
         self.without_threats_dir.mkdir(parents=True, exist_ok=True)
+
         self.llm_config = getattr(self.config, "LLM_CONFIG", {})
-        self.api_key = self.llm_config.get("api_key") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("sk-b5af794365e34fe4b8706cba69088004")
+        self.api_key = self.llm_config.get("api_key") or os.getenv("DEEPSEEK_API_KEY")
         self.base_url = self.llm_config.get("base_url") or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
         self.model_name = self.llm_config.get("model_name") or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url) if self.api_key else None
+
+        logger.debug("Initializing UAVThreatBenchAnalyzer")
+        logger.debug("Using raw data directory: %s", self.raw_data_dir)
+        logger.debug("LLM config loaded: %s", self.llm_config)
+
+        if self.api_key:
+            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            logger.info("OpenAI client initialized successfully for model '%s' at %s", self.model_name, self.base_url)
+        else:
+            self.client = None
+            logger.warning("DeepSeek API key not found. Using heuristic fallback.")
+            print("⚠️ DeepSeek API Key not found. Using heuristic fallback.")
 
     def _load_json(self, file_path: str | Path) -> List[Dict[str, Any]]:
         path = Path(file_path)
@@ -96,12 +115,27 @@ class UAVThreatBenchAnalyzer:
                 print("Sample value for", key, ":", first[key])
                 break
 
+    def _is_reasoning_model(self) -> bool:
+        model_name = (self.model_name or "").lower()
+        return any(marker in model_name for marker in ("reasoner", "reasoning", "r1", "deepseek-v4-flash"))
+
     def build_prompt(self, scenario_description: str) -> Dict[str, str]:
+        reasoning_hint = ""
+        if self._is_reasoning_model():
+            reasoning_hint = (
+                "You are allowed to use reasoning internally to analyze the scenario. "
+                "Do not expose chain-of-thought or verbose explanations. "
+            )
+
         system_prompt = (
-            "You are an unmanned aerial vehicle (UAV) cybersecurity expert. "
-            "Given a scenario description, identify potential cyber threats. "
+            "You are a UAV cybersecurity expert performing a thorough threat analysis. "
+            f"{reasoning_hint}"
+            "Analyze the given scenario and identify EVERY possible cybersecurity threat. "
+            "Do not limit yourself to the most obvious threat. Consider all relevant attack surfaces, including network interfaces, communication links, software/firmware, physical access points, backend systems, and data flows. "
+            "Aim to generate a comprehensive list of at least 3-5 distinct threats per scenario. "
             "Return JSON only as an array of objects with fields 'description' and 'category'. "
-            "Use category values d, e, or f, where d=network integrity, e=personal data/privacy, f=fraud/economic harm."
+            "Categories: (d)=network integrity, (e)=personal data/privacy, (f)=fraud/economic harm. "
+            "Do not include markdown fences, commentary, or explanatory text."
         )
         user_prompt = (
             "Scenario description:\n"
@@ -112,9 +146,17 @@ class UAVThreatBenchAnalyzer:
 
     def _extract_json(self, text: str) -> List[Dict[str, Any]]:
         text = text.strip()
-        if text.startswith("```"):
-            text = re.sub(r"^```(?:json)?\s*", "", text)
-            text = re.sub(r"\s*```$", "", text)
+        if not text:
+            logger.debug("LLM returned empty content")
+            return []
+
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
+        text = text.replace("```json", "").replace("```", "")
+        text = text.strip()
+        if not text:
+            logger.debug("LLM returned only reasoning content")
+            return []
+
         start = text.find("[")
         end = text.rfind("]")
         if start != -1 and end != -1 and end > start:
@@ -123,12 +165,15 @@ class UAVThreatBenchAnalyzer:
                 parsed = json.loads(candidate)
                 if isinstance(parsed, list):
                     return parsed
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as exc:
+                logger.debug("Failed to parse JSON array from LLM output: %s", exc)
         try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            return []
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError as exc:
+            logger.debug("Failed to parse LLM output as JSON: %s", exc)
+        return []
 
     def _normalize_threats(self, threats: Any) -> List[Dict[str, str]]:
         if not isinstance(threats, list):
@@ -140,6 +185,19 @@ class UAVThreatBenchAnalyzer:
                 category = item.get("category") or item.get("type") or ""
                 normalized.append({"description": str(description), "category": str(category)})
         return normalized
+
+    def _extract_scenario_text(self, item: Dict[str, Any]) -> str:
+        for key in ("Scenario Description", "scenario_description", "description", "text"):
+            if key in item and isinstance(item.get(key), str) and item.get(key).strip():
+                return item[key].strip()
+        return ""
+
+    def _extract_expected_threats(self, item: Dict[str, Any]) -> List[Dict[str, Any]]:
+        for key in ("Expected Threats", "expected_threats", "threats"):
+            value = item.get(key)
+            if isinstance(value, list):
+                return value
+        return []
 
     def _heuristic_threats(self, scenario_description: str) -> List[Dict[str, str]]:
         description = scenario_description.lower()
@@ -159,26 +217,49 @@ class UAVThreatBenchAnalyzer:
 
     def call_llm(self, scenario_description: str, max_retries: int = 3) -> List[Dict[str, str]]:
         if self.client is None:
+            logger.debug("No LLM client available; using heuristic fallback for scenario: %s", scenario_description[:80])
             return self._heuristic_threats(scenario_description)
+
+        if not scenario_description.strip():
+            logger.warning("Scenario description is empty; skipping LLM call")
+            return []
 
         prompt = self.build_prompt(scenario_description)
         last_error: Optional[Exception] = None
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
+                request_kwargs: Dict[str, Any] = {
+                    "model": self.model_name,
+                    "messages": [
                         {"role": "system", "content": prompt["system"]},
                         {"role": "user", "content": prompt["user"]},
                     ],
-                    temperature=0.2,
-                    max_tokens=300,
-                )
+                    "temperature": 0.2,
+                    "max_tokens": 300,
+                }
+
+                # DeepSeek V4 系列在思考模式下会返回 reasoning_content，
+                # 这会破坏当前的 JSON 解析逻辑。这里显式禁用思考模式，
+                # 让响应保持标准 content 字段格式，兼容现有流程。
+                extra_body = None
+                if isinstance(self.llm_config, dict):
+                    extra_body = self.llm_config.get("extra_body")
+                if not isinstance(extra_body, dict):
+                    extra_body = {"thinking": {"type": "disabled"}}
+                request_kwargs["extra_body"] = extra_body
+
+                response = self.client.chat.completions.create(**request_kwargs)
                 content = response.choices[0].message.content or ""
+                logger.debug("LLM raw response: %s", content[:500])
                 parsed = self._extract_json(content)
-                return self._normalize_threats(parsed)
+                normalized = self._normalize_threats(parsed)
+                if not normalized:
+                    logger.warning("LLM returned no usable threats for scenario: %s; using heuristic fallback", scenario_description[:200])
+                    return self._heuristic_threats(scenario_description)
+                return normalized
             except Exception as exc:  # pragma: no cover
                 last_error = exc
+                logger.warning("LLM call attempt %s failed: %s", attempt + 1, exc)
                 if attempt < max_retries - 1:
                     time.sleep(2 ** attempt)
                 else:
@@ -191,12 +272,36 @@ class UAVThreatBenchAnalyzer:
 
         results = []
         for item in tqdm(items, desc=dataset_name):
-            scenario_description = item.get("scenario_description") or item.get("description") or ""
-            expected_threats = item.get("Expected Threats") or item.get("expected_threats") or []
+            # 按优先级尝试多种字段名，兼容不同版本的 JSON 文件
+            scenario_description = (
+                item.get("scenario_description")
+                or item.get("Scenario Description")
+                or item.get("description")
+                or ""
+            )
+            expected_threats = (
+                item.get("expected_threats")
+                or item.get("Expected Threats")
+                or []
+            )
+
+            if isinstance(scenario_description, str):
+                scenario_description = scenario_description.strip()
+
+            if len(results) < 3:
+                print(f"DEBUG: scenario_description = {scenario_description[:100]}...")
+                print(f"DEBUG: expected_threats count = {len(expected_threats)}")
+
+            if not scenario_description:
+                print("Warning: scenario_description is empty for this item")
+            if not expected_threats:
+                print("Warning: expected_threats is empty for this item")
+
             try:
                 model_threats = self.call_llm(scenario_description)
             except Exception as exc:
                 model_threats = []
+                logger.warning("LLM error for scenario: %s", exc)
                 print(f"LLM error for scenario: {exc}")
 
             result_entry = {
@@ -213,7 +318,16 @@ class UAVThreatBenchAnalyzer:
         return results
 
     def _token_score(self, left: str, right: str) -> int:
-        return fuzz.token_set_ratio(left.lower(), right.lower())
+        if thefuzz_fuzz is not None:
+            return thefuzz_fuzz.token_set_ratio(left.lower(), right.lower())
+
+        left_tokens = set(re.findall(r"\w+", left.lower()))
+        right_tokens = set(re.findall(r"\w+", right.lower()))
+        if not left_tokens or not right_tokens:
+            return 0
+        overlap = len(left_tokens & right_tokens)
+        union = len(left_tokens | right_tokens)
+        return int((overlap / union) * 100) if union else 0
 
     def evaluate_results(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
         matches = []

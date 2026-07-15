@@ -3,6 +3,11 @@ import os
 from pathlib import Path
 
 try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    load_dotenv = None
+
+try:
     import torch
 except Exception:  # pragma: no cover
     # 捕获所有异常（包括 Windows 上可能出现的 OSError/DLL 加载错误），
@@ -12,6 +17,13 @@ except Exception:  # pragma: no cover
 # -------------------- 项目根目录 --------------------
 # 自动获取项目根目录（假设config.py在configs/下）
 ROOT_DIR = Path(__file__).resolve().parent.parent
+
+# 从项目根目录或配置目录加载 .env，确保 os.getenv() 能拿到 API 配置
+if load_dotenv is not None:
+    for env_file in (ROOT_DIR / ".env", ROOT_DIR / "configs" / ".env", Path.cwd() / ".env"):
+        if env_file.exists():
+            load_dotenv(env_file, override=False)
+            break
 
 # -------------------- 数据路径 --------------------
 DATA_DIR = ROOT_DIR / "data"
@@ -52,7 +64,7 @@ LLM_EVALUATION_REPORT = LLM_OUTPUT_WITH / "evaluation_report.txt"
 LLM_CONFIG = {
     "api_key": os.getenv("DEEPSEEK_API_KEY"),
     "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-    "model_name": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+    "model_name": os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
     "temperature": 0.2,
     "max_tokens": 500,
 }
@@ -70,6 +82,8 @@ TRAIN_CONFIG = {
     "val_size": 0.2,           # 验证集占训练集比例
     "random_state": 42,        # 保证可复现
     "use_smote": True,         # 是否使用SMOTE处理不平衡
+    "early_stopping_patience": 5,
+    "device": "cuda" if torch is not None and torch.cuda.is_available() else "cpu",
 }
 
 # 模型架构参数 (以CNN-BiLSTM为例)
@@ -151,7 +165,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(PLOT_DIR, exist_ok=True)
 
 # 打印关键路径，方便验证
-print(f"项目根目录: {ROOT_DIR}")
+""" print(f"项目根目录: {ROOT_DIR}")
 print(f"原始数据目录: {RAW_DATA_DIR}")
 print(f"处理后数据目录: {PROCESSED_DATA_DIR}")
 print(f"模型目录: {MODEL_DIR}")
@@ -159,3 +173,4 @@ print(f"日志目录: {LOG_DIR}")
 print(f"图表目录: {PLOT_DIR}")
 print(f"LLM 数据 (含威胁): {UAV_THREAT_BENCH_WITH}")
 print(f"LLM 数据 (无威胁): {UAV_THREAT_BENCH_WITHOUT}")
+print(f"大模型 API 配置: {LLM_CONFIG}") """

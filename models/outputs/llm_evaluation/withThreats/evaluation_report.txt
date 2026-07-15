@@ -1,45 +1,47 @@
 ========================================
 UAVThreatBench 大模型威胁识别评估报告
 ========================================
-评估时间: 2026-07-14 17:56:39
+评估时间: 2026-07-15 17:03:22
 评估场景数: 924
 包含 ground_truth 的场景数: 924
+匹配阈值: 75
 
 === 总体指标 ===
-总匹配率: 0.00% (至少一个威胁匹配)
+总匹配率: 38.74% (至少一个威胁匹配)
+加权匹配率: 10.68% (按重要性加权)
 完美匹配率: 0.00% (所有威胁匹配)
-平均匹配分数: 0.0
+平均匹配分数: 73.4
 
 === 各类别匹配率 ===
-(d) 网络完整性 威胁: 0.00%
-(e) 个人数据/隐私 威胁: 0.00%
-(f) 欺诈/经济 威胁: 0.00%
+(d) 网络完整性 威胁: 15.02%
+(e) 个人数据/隐私 威胁: 5.73%
+(f) 欺诈/经济 威胁: 4.73%
 
 === 匹配分数分布 ===
 
 === 典型场景示例（高分） ===
 === 典型场景示例（低分） ===
-Score: 0
-Scenario: 
-Expected: ['', '', '', '', '']
-Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+Score: 60
+Scenario: In an Indoor Warehouse, an Inventory Management Drone interacts with an Manufacturing Execution System (MES) Server using a WPA2-Enterprise Wi-Fi. This involves Real-time inventory data upload. A potential cybersecurity concern arises from the Network Interface via Insecure Ethernet Port.
+Expected: ['Unauthorized access to the MES server through an insecure Ethernet port, potentially leading to disruption of operations.', 'Eavesdropping on the real-time inventory data due to potential weaknesses in WPA2-Enterprise configuration, leading to data breaches.', "Man-in-the-middle attack on the drone's Wi-Fi connection to intercept sensitive operational data.", "Exploitation of the drone's network interface to inject malicious commands affecting its operation and leading to potential harm to devices and network.", "Spoofing of the drone's identity to commit unauthorized actions or data manipulation, resulting in fraudulent inventory records."]
+Generated: [{'description': "An attacker with physical access to the insecure Ethernet port could connect a rogue device to the MES network, intercepting or injecting malicious traffic into the drone's communication channel.", 'category': '(d)'}, {'description': "Eavesdropping on the WPA2-Enterprise Wi-Fi traffic via the Ethernet port's network bridge could allow an attacker to capture unencrypted inventory data, exposing sensitive operational information.", 'category': '(e)'}, {'description': 'An attacker exploiting the insecure Ethernet port could perform ARP spoofing or man-in-the-middle attacks to alter real-time inventory data, leading to fraudulent stock levels and economic losses.', 'category': '(f)'}, {'description': 'The insecure Ethernet port could be used to launch a denial-of-service attack against the MES server, disrupting drone inventory uploads and causing operational downtime.', 'category': '(d)'}, {'description': "An attacker could use the Ethernet port to access the MES server's backend, exfiltrating historical inventory data and violating privacy of warehouse operations.", 'category': '(e)'}]
 
-Score: 0
-Scenario: 
-Expected: ['', '', '', '', '']
-Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+Score: 60
+Scenario: In an Indoor Warehouse, an Inventory Management Drone interacts with an Manufacturing Execution System (MES) Server using a WPA2-Enterprise Wi-Fi. This involves Real-time inventory data upload. A potential cybersecurity concern arises from the Physical Access Point via Tamperable Onboard Storage.
+Expected: ['Unauthorized access to the MES server through compromised Wi-Fi credentials, leading to potential network/device harm.', 'Interception of real-time inventory data during transmission over the Wi-Fi network, risking data protection and privacy.', "Physical tampering with the drone's onboard storage to extract sensitive inventory data, compromising data privacy.", 'Use of compromised drone credentials to introduce fraudulent inventory data into the MES, affecting system integrity.', 'Manipulation of drone firmware via physical access, causing operational disruptions and network/device damage.']
+Generated: [{'description': 'An attacker with physical access to the drone could tamper with onboard storage to modify inventory data before upload, leading to inaccurate records and potential supply chain disruption.', 'category': '(d)'}, {'description': "Malicious firmware or data injection via tampered onboard storage could compromise the drone's communication with the MES server, enabling data exfiltration or injection of false inventory information.", 'category': '(d)'}, {'description': 'Extraction of sensitive inventory data from tampered onboard storage could reveal proprietary warehouse layouts or stock levels, leading to competitive intelligence loss or targeted theft.', 'category': '(e)'}, {'description': 'An attacker could use a rogue access point to intercept or manipulate WPA2-Enterprise Wi-Fi traffic, capturing credentials or altering real-time inventory uploads to cause financial harm through misinformed manufacturing decisions.', 'category': '(f)'}, {'description': "Physical tampering with the drone's storage could allow an attacker to implant malware that spreads to the MES server via the Wi-Fi link, disrupting warehouse operations and causing economic loss.", 'category': '(f)'}]
 
-Score: 0
-Scenario: 
-Expected: ['', '', '', '', '']
-Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+Score: 60
+Scenario: In an Indoor Warehouse, an Inventory Management Drone interacts with an Manufacturing Execution System (MES) Server using a Private LTE/5G Network. This involves Real-time inventory data upload. A potential cybersecurity concern arises from the Network Interface via Insecure Ethernet Port.
+Expected: ['Unauthorized access to the drone via insecure Ethernet port leading to control hijacking', 'Interception and manipulation of real-time inventory data during upload, compromising data integrity', 'Exploitation of the MES server vulnerabilities through the private LTE/5G network to disrupt operations', 'Data exfiltration of sensitive inventory data from the drone, violating data privacy', 'Impersonation attack on the network interface to perform fraudulent transactions']
+Generated: [{'description': 'An attacker with physical access to the insecure Ethernet port could connect a rogue device to the Private LTE/5G network, intercepting or injecting malicious traffic to disrupt inventory data uploads.', 'category': '(d)'}, {'description': 'Unauthorized access via the Ethernet port could allow an attacker to eavesdrop on real-time inventory data transmitted between the drone and MES Server, exposing sensitive operational information.', 'category': '(e)'}, {'description': 'An attacker exploiting the insecure port could perform a man-in-the-middle attack, altering inventory records to cause financial losses through incorrect stock levels or fraudulent orders.', 'category': '(f)'}, {'description': 'The insecure Ethernet port could be used to launch a denial-of-service attack against the MES Server or drone communication, disrupting warehouse operations and causing economic harm.', 'category': '(f)'}, {'description': 'Physical access to the Ethernet port might enable an attacker to deploy malware or backdoor into the network, compromising the integrity of the entire Private LTE/5G infrastructure.', 'category': '(d)'}]
 
-Score: 0
-Scenario: 
-Expected: ['', '', '', '', '']
-Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+Score: 59
+Scenario: In an Indoor Warehouse, an Inventory Management Drone interacts with an Manufacturing Execution System (MES) Server using a Private LTE/5G Network. This involves Real-time inventory data upload. A potential cybersecurity concern arises from the Communication Link via RF Jamming.
+Expected: ['RF Jamming of the Private LTE/5G Network disrupting communication between the drone and MES server.', 'Unauthorized interception and access to real-time inventory data during transmission, leading to potential data breaches.', 'Spoofing of drone communication signals, leading to incorrect inventory data being uploaded to the MES server.', "Malware injection into the drone's software via compromised network, potentially leading to network/device harm.", 'Unauthorized command injection causing the drone to execute unintended actions, potentially affecting inventory data integrity and security.']
+Generated: [{'description': 'RF jamming of the Private LTE/5G link could disrupt real-time inventory data upload, causing data loss or delays in inventory tracking.', 'category': '(d)'}, {'description': "An attacker could spoof the drone's identity over the jammed or degraded link to inject false inventory data into the MES server.", 'category': '(f)'}, {'description': 'RF jamming may force the drone to fall back to an unsecured communication channel, exposing inventory data to interception.', 'category': '(e)'}, {'description': 'Prolonged jamming could lead to drone disconnection and autonomous emergency landing, potentially causing physical damage or data corruption.', 'category': '(d)'}, {'description': 'Jamming combined with replay attacks could allow an adversary to capture and replay inventory data, leading to inventory discrepancies and economic harm.', 'category': '(f)'}]
 
-Score: 0
-Scenario: 
-Expected: ['', '', '', '', '']
-Generated: [{'description': 'Potential unauthorized manipulation of drone operations.', 'category': 'd'}]
+Score: 56
+Scenario: In an Indoor Warehouse, an Inventory Management Drone interacts with an Manufacturing Execution System (MES) Server using a Private LTE/5G Network. This involves Real-time inventory data upload. A potential cybersecurity concern arises from the Backend System Interaction via Insecure API to WMS/MES.
+Expected: ["Unauthorized access to the drone's communication channel via private LTE/5G network, leading to potential control takeover.", 'Interception of real-time inventory data during transmission, resulting in data leakage and privacy breach.', 'Exploitation of insecure API between drone and MES/WMS, allowing attackers to manipulate inventory data.', 'Denial of Service (DoS) attack on the MES Server through network vulnerabilities, disrupting warehouse operations.', 'Data theft from insecure backend system interaction, compromising sensitive business information.']
+Generated: [{'description': 'An attacker intercepts or modifies real-time inventory data transmitted over the Private LTE/5G network between the drone and the MES server, potentially causing inventory discrepancies or operational disruption.', 'category': '(d)'}, {'description': 'Insecure API endpoints between the drone and WMS/MES allow unauthorized access or injection of malicious data, leading to data corruption or system compromise.', 'category': '(d)'}, {'description': 'An attacker exploits weak authentication or encryption in the Private LTE/5G network to eavesdrop on inventory data, exposing sensitive business information or trade secrets.', 'category': '(e)'}, {'description': 'A malicious actor gains unauthorized access to the MES server via the insecure API, altering inventory records to facilitate theft or fraud within the warehouse.', 'category': '(f)'}, {'description': "An attacker performs a man-in-the-middle attack on the drone's communication link, injecting false inventory updates to manipulate stock levels and cause economic harm through supply chain disruptions.", 'category': '(f)'}]
