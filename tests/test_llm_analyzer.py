@@ -35,4 +35,5 @@ def test_heuristic_fallback_returns_threats_without_api_key():
     threats = analyzer._heuristic_threats("A drone is connected to a Wi-Fi network and data is exposed")
 
     assert threats
-    assert any(item["category"] == "e" for item in threats)
+    # 新启发式函数返回带括号的 RED 类别标记 "(d)" / "(e)" / "(f)"
+    assert any(item["category"] in ("e", "(e)") for item in threats)
