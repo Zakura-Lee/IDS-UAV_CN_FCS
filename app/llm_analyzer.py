@@ -60,7 +60,7 @@ class UAVThreatBenchAnalyzer:
         self.llm_config = getattr(self.config, "LLM_CONFIG", {})
         self.api_key = self.llm_config.get("api_key") or os.getenv("DEEPSEEK_API_KEY")
         self.base_url = self.llm_config.get("base_url") or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-        self.model_name = self.llm_config.get("model_name") or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+        self.model_name = self.llm_config.get("model_name") or os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 
         logger.debug("Initializing UAVThreatBenchAnalyzer")
         logger.debug("Using raw data directory: %s", self.raw_data_dir)
@@ -119,137 +119,34 @@ class UAVThreatBenchAnalyzer:
         model_name = (self.model_name or "").lower()
         return any(marker in model_name for marker in ("reasoner", "reasoning", "r1", "deepseek-v4-flash"))
 
-    def build_prompt(self, scenario: Dict[str, Any]) -> Dict[str, str]:
-        """Build a structured prompt from ALL scenario fields, with RED definitions,
-        keyword guidance, few-shot examples, and precise format specifications."""
-        # Extract every available field
-        scenario_id = scenario.get("Scenario ID", "") or scenario.get("scenario_id", "")
-        env = scenario.get("Environment Context", "") or scenario.get("environment_context", "")
-        uav_role = scenario.get("UAV Role", "") or scenario.get("uav_role", "")
-        ot_component = (
-            scenario.get("Interacting OT Component", "")
-            or scenario.get("interacting_ot_component", "")
-        )
-        protocol = scenario.get("Communication Protocol", "") or scenario.get("communication_protocol", "")
-        data_flow = scenario.get("Data Flow/Function", "") or scenario.get("data_flow", "")
-        attack_vector = (
-            scenario.get("Cybersecurity Origin/Attack Vector", "")
-            or scenario.get("attack_vector", "")
-        )
-        consequences = scenario.get(
-            "Potential Cybersecurity Consequences (from origin)", []
-        ) or scenario.get("potential_consequences", [])
-        if isinstance(consequences, list):
-            consequences = ", ".join(str(c) for c in consequences)
-        summary = (
-            scenario.get("Scenario Description", "")
-            or scenario.get("scenario_description", "")
-            or ""
-        )
+    def build_prompt(self, scenario_description: str) -> Dict[str, str]:
+        """Minimalist prompt: baseline + 3 lightweight enhancements.
 
+        Baseline (45.02% match rate) plus sentence guidance, category
+        examples, and format reinforcement.  Keeps the prompt short so the
+        model focuses on the scenario rather than complex instructions.
+        """
         reasoning_hint = ""
         if self._is_reasoning_model():
             reasoning_hint = (
-                "Use internal reasoning to analyze the scenario, but do NOT expose "
-                "chain-of-thought or verbose explanations in your final output. "
+                "You are allowed to use reasoning internally to analyze the "
+                "scenario. Do not expose chain-of-thought or verbose "
+                "explanations. "
             )
 
-        # System prompt: RED categories + keyword guidance + writing rules + few-shot
         system_prompt = (
-            "You are a UAV cybersecurity expert. For each scenario, identify "
-            "exactly FIVE cybersecurity threats and classify each under the "
-            "RED (Radio Equipment Directive) framework.\n\n"
-
-            "=== RED CATEGORIES & KEYWORD GUIDANCE ===\n\n"
-
-            "(d) Network integrity / device protection.\n"
-            "Keywords: unauthorized access, hijack, disrupt, jam, inject, "
-            "tamper, spoof, impersonate, man-in-the-middle, denial of service, "
-            "compromise, manipulate operations, physical harm, device malfunction, "
-            "malicious firmware, command injection, network intrusion.\n\n"
-
-            "(e) Personal data / privacy protection.\n"
-            "Keywords: eavesdrop, intercept, data breach, expose, leak, "
-            "exfiltrate, sensitive, proprietary, privacy, confidentiality, "
-            "unauthorized data access, information leakage, operational secrets.\n\n"
-
-            "(f) Fraud / economic harm protection.\n"
-            "Keywords: fraudulent, financial loss, inventory discrepancy, "
-            "economic harm, manipulate records, falsify, misdirect, theft, "
-            "unauthorized transactions, supply chain disruption, competitive loss.\n\n"
-
-            "=== WRITING RULES ===\n\n"
-
-            "1. Each threat = ONE sentence (15-25 words). Use the pattern:\n"
-            '   \"[Attacker or attack vector] could [specific action], [consequence].\"\n\n'
-
-            "2. Be SPECIFIC -- name the protocol, component, or data flow involved.\n"
-            '   Avoid vague terms like \"malicious activity\" or \"security issue\".\n\n'
-
-            "3. Each threat targets ONE attack surface and ONE primary harm.\n\n"
-
-            "4. Cover at least 2 RED categories. Include at least one (f) threat when "
-            "the scenario involves data manipulation, financial operations, "
-            "or inventory management.\n\n"
-
-            f"{reasoning_hint}\n"
-
-            "=== FEW-SHOT EXAMPLES ===\n\n"
-
-            "Example 1 -- Network Interface attack (Wi-Fi unauthorized access):\n"
-            "INPUT:\n"
-            "  Environment: Indoor Warehouse | UAV Role: Inventory Management Drone\n"
-            "  Interacting System: Manufacturing Execution System (MES) Server\n"
-            "  Communication: WPA2-Enterprise Wi-Fi\n"
-            "  Data Flow: Real-time inventory data upload\n"
-            "  Attack Vector: Unauthorized Wi-Fi Access\n"
-            "  Consequences: Data Exfiltration, Command Injection, Denial of Service\n"
-            "OUTPUT:\n"
-            '[{"description":"Unauthorized access to the Wi-Fi network could allow an attacker to intercept or alter real-time inventory data during transmission.","category":"(e)"},{"description":"An attacker gaining unauthorized access to the drone network interface could manipulate drone operations, causing physical harm to the device or operational disruptions.","category":"(d)"},{"description":"Interception of data between the drone and the MES server could lead to data breaches, exposing sensitive inventory information.","category":"(e)"},{"description":"An attacker could spoof the MES server or the drone to inject fraudulent data into the inventory system, leading to inventory discrepancies and potential financial losses.","category":"(f)"},{"description":"Unauthorized access to the WPA2-Enterprise network could allow an attacker to execute man-in-the-middle attacks, compromising the integrity of data being uploaded to the MES server.","category":"(d)"}]\n\n'
-
-            "Example 2 -- Communication Link attack (RF Jamming on LoRaWAN):\n"
-            "INPUT:\n"
-            "  Environment: Outdoor Agricultural Field | UAV Role: Crop Spraying Drone\n"
-            "  Interacting System: Farm Management System (FMS)\n"
-            "  Communication: LoRaWAN\n"
-            "  Data Flow: Spray pattern commands and telemetry data\n"
-            "  Attack Vector: RF Jamming / Signal Interference\n"
-            "  Consequences: Communication Loss, Unauthorized Command Injection\n"
-            "OUTPUT:\n"
-            '[{"description":"RF jamming of the LoRaWAN link could disrupt spray pattern commands, causing crop damage and economic loss.","category":"(f)"},{"description":"Signal interference could force the drone into fail-safe mode, enabling command injection via a rogue LoRa gateway.","category":"(d)"},{"description":"Eavesdropping on LoRaWAN telemetry during degraded communication could expose farm operational data and proprietary spray formulas.","category":"(e)"},{"description":"Prolonged jamming could trigger an emergency landing in an unsafe location, causing physical damage to the drone and surrounding property.","category":"(d)"},{"description":"Replay of captured telemetry packets could spoof normal operations, masking physical theft or unauthorized spraying activities.","category":"(f)"}]\n\n'
-
-            "=== OUTPUT FORMAT ===\n"
-            "Return ONLY a JSON array of exactly 5 objects. "
-            "No markdown fences, commentary, or explanatory text.\n"
-            '[{"description": "<specific threat>", "category": "(d)|(e)|(f)"}, ...]'
+            "You are an unmanned aerial vehicle (UAV) cybersecurity expert. "
+            f"{reasoning_hint}"
+            "Given a scenario description, identify potential cyber threats. "
+            "Each description should be a complete sentence with specific consequence. "
+            "Return JSON only as an array of objects with fields 'description' and 'category'. "
+            "Use category values (d), (e), or (f), where (d)=network integrity, (e)=personal data/privacy, (f)=fraud/economic harm. "
+            "Category examples: (d) 'attacker could disrupt network operations', (e) 'attacker could expose sensitive data', (f) 'attacker could cause financial loss'. "
+            "Output ONLY valid JSON, no additional text."
         )
-
-        # User prompt: all structured fields
-        user_fields = []
-        if scenario_id:
-            user_fields.append(f"Scenario ID: {scenario_id}")
-        if env:
-            user_fields.append(f"Environment: {env}")
-        if uav_role:
-            user_fields.append(f"UAV Role: {uav_role}")
-        if ot_component:
-            user_fields.append(f"Interacting System: {ot_component}")
-        if protocol:
-            user_fields.append(f"Communication: {protocol}")
-        if data_flow:
-            user_fields.append(f"Data Flow: {data_flow}")
-        if attack_vector:
-            user_fields.append(f"Attack Vector: {attack_vector}")
-        if consequences:
-            user_fields.append(f"Potential Consequences: {consequences}")
-        if summary:
-            user_fields.append(f"Summary: {summary}")
-
         user_prompt = (
-            "Analyze this UAV operational scenario and identify the 5 most "
-            "significant cybersecurity threats under the RED framework.\n\n"
-            + "\n".join(user_fields)
-            + "\n\nReturn only a JSON array of 5 threat objects."
+            "Analyze this scenario and list the threats in a JSON array:\n"
+            f"{scenario_description}"
         )
         return {"system": system_prompt, "user": user_prompt}
 
@@ -395,23 +292,18 @@ class UAVThreatBenchAnalyzer:
 
         return threats[:5]
 
-    def call_llm(self, scenario: Dict[str, Any], max_retries: int = 3) -> List[Dict[str, str]]:
-        # Extract description for fallback and logging
-        scenario_description = (
-            scenario.get("Scenario Description", "")
-            or scenario.get("scenario_description", "")
-            or ""
-        ).strip()
+    def call_llm(self, scenario_description: str, max_retries: int = 3) -> List[Dict[str, str]]:
+        scenario_description = scenario_description.strip()
 
         if self.client is None:
             logger.debug("No LLM client available; using heuristic fallback for scenario: %s", scenario_description[:80])
-            return self._heuristic_threats(scenario)
+            return self._heuristic_threats(scenario_description)
 
         if not scenario_description:
             logger.warning("Scenario description is empty; skipping LLM call")
             return []
 
-        prompt = self.build_prompt(scenario)
+        prompt = self.build_prompt(scenario_description)
         last_error: Optional[Exception] = None
         for attempt in range(max_retries):
             try:
@@ -446,7 +338,7 @@ class UAVThreatBenchAnalyzer:
                         "raw content (first 300 chars): %s; using heuristic fallback",
                         scenario_description[:200], content[:300],
                     )
-                    return self._heuristic_threats(scenario)
+                    return self._heuristic_threats(scenario_description)
                 return normalized
             except Exception as exc:  # pragma: no cover
                 last_error = exc
@@ -488,7 +380,7 @@ class UAVThreatBenchAnalyzer:
 
 
             try:
-                model_threats = self.call_llm(item)
+                model_threats = self.call_llm(scenario_description)
             except Exception as exc:
                 model_threats = []
                 logger.warning("LLM error for scenario: %s", exc)
